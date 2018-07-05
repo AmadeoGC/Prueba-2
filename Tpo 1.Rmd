@@ -1,0 +1,210 @@
+.  
+
+![alt text](http://www.aquabench.com/wp-content/uploads/2015/04/aquabench.fw_.fw_.png)  
+
+
+## **Proyecto SRS**
+###**Evaluación del tiempo al primer Brote* de SRS**
+###**Analisis de Supervivencia**
+
+###*Amadeo Guzmán C.*
+
+######*Brote -> Cuadro de mortalida mensual de SRS >= a 0.35%*
+___
+
+#####**LECTURA DEL ARCHIVO**
+```{r}
+setwd("C:/Datos_R/BDatos/Proyecto SRS")
+tpo.brote<- read.csv2("tiempo al primer brote.csv", header = TRUE)
+head(tpo.brote)
+str(tpo.brote)
+dim(tpo.brote)
+names(tpo.brote)
+
+#Objeto que guarda solo los casos con brote (cuadro de SRS >=0,35% mensual) para evaluarlos más adelante
+caso<- tpo.brote[tpo.brote$cens12m=="1",]
+```
+
+#####**LIBRERIAS NECESARIAS**
+```{r}
+library(survival)
+library(ggplot2)
+library(GGally)
+library(grid)
+library(scales)
+```
+
+
+#### **ANÁLISIS DE SUPERVIVENCIA - TIEMPO AL PRIMER CUADRO SRS >0,35% MES**
+```{r}
+# En primer lugar se trabajara con `TODA LA TABLA DE DATOS` (datos censados y no censados)
+#Kaplan-Meier -> Mod. Supervivencia gral.
+KM<- survfit( Surv(tpo.brote.12m, cens12m)~ 1, conf.type="log", data=tpo.brote)
+KM
+
+#plot básico
+plot(KM, xlab="Tiempo (Mes)", ylab="Prob de Supervivencia",main="Supervivencia Kaplan-Meier")
+
+#Tabla de supervivencia
+summary(KM) 
+
+```
+
+```{r fig.align='center'}
+# Gráfico con <GGPLOT2 y GGSURV>
+
+ggsurv(KM)+guides(linetype=FALSE)+
+  labs(x="\nTiempo (meses)",y="Prob de Supervivencia\n")+
+  ylim(0,1)+
+  scale_x_continuous(breaks=seq(0,12,2))+
+  ggtitle(expression(atop("Tiempo al Primer Cuadro SRS (>0,35% Mort. Mes) Post Ingreso a Mar en SALAR", 
+                          atop(italic("Región de Los Lagos y Región de Aysén - Nivel Jaula")))))+
+  theme(legend.background = element_rect(fill = "white"),legend.key = element_rect(fill = "white"))
+```
+
+####***Regresión de COX -> Modelo de riesgos proporcionales***  
+ + Reg COX permite incluir covariables al modelo.El análisis con este modelo permite estimar los coeficientes, como si de Regresión lineal o Regresión Logística se tratara que indicarán la influencia de las covariables en el tiempo de supervivencia.
+```{r}
+CoxModel <- coxph(Surv(tpo.brote.12m, cens12m) ~ 1 + region + peso.in + smol.in, method="efron", data=tpo.brote)
+summary(CoxModel)
+```
+
+>
+##### **COMPARACIÓN POR TEMPORADA**
+```{r}
+mod.temp<- survfit(Surv(tpo.brote.12m, cens12m) ~ temporada2, data=tpo.brote)
+mod.temp
+
+#plot básico
+plot(mod.temp, col=1:4) 
+
+#tabla supervivencia para cada grupo
+summary(mod.temp)
+
+#Log-Rank
+survdiff(Surv(tpo.brote.12m, cens12m) ~ temporada2, rho=0, data=tpo.brote)
+```
+
+```{r fig.align='center', fig.width=10, fig.height=5}
+# Gráfico con <GGPLOT2 y GGSURV>
+
+color.temp <- c("green", "blue", "purple", "red") #Colores manual
+
+ggsurv(mod.temp)+
+  guides(linetype=FALSE)+
+  ylim(0,1)+
+  scale_x_continuous(breaks=seq(0,12,2))+
+  labs(x="\nTiempo (Meses)",y="Supervivencia\n")+
+  ggtitle(expression(atop("Tiempo al Primer Cuadro SRS Post Ingreso a Mar en Salmón del Atlántico - Temporada", 
+  atop(italic("Región de Los Lagos y Región de Aysén - Ciclos Cerrados Ene-14 a Jun-15.Nivel Jaula")))))+
+  theme(legend.background = element_rect(fill = "white"),legend.key = element_rect(fill = "white"),
+        legend.position = c(0.1, 0.35),legend.key.size = unit(.3, "in"))+
+  scale_color_manual(values=color.temp, name= "Temporada",
+                     labels=c("Invierno", "Otoño", "Primavera", "Verano"))
+```
+
+>
+##### **COMPARACIÓN POR REGIÓN**
+```{r}
+#Modelo KM
+mod.reg<- survfit(Surv(tpo.brote.12m, cens12m) ~ region, data=tpo.brote)
+mod.reg
+
+#Plot básico
+plot(mod.reg, col=1:2)
+
+#tabla supervivencia para cada grupo
+summary(mod.reg) 
+
+#Log-Rank
+survdiff(Surv(tpo.brote.12m, cens12m) ~ region, rho=0, data=tpo.brote)
+```
+
+```{r fig.align='center', fig.width=8}
+# Gráfico con <GGPLOT2 y GGSURV>
+
+color.region <- c("blue", "red") #Colores manual
+
+ggsurv(mod.reg)+
+  guides(linetype=FALSE)+
+  ylim(0,1)+
+  scale_x_continuous(breaks=seq(0,12,2))+
+  labs(x="\nTiempo (Meses)",y="Supervivencia\n")+
+  ggtitle(expression(atop("Tiempo al Primer Cuadro SRS Post Ingreso a Mar en Salmón del Atlántico - Región",   atop(italic("Región de Los Lagos y Región de Aysén - Ciclos Cerrados Ene-14 a Jun-15.Nivel Jaula")))))+
+  theme(legend.background = element_rect(fill = "white"),legend.key = element_rect(fill = "white"),
+        legend.position = c(0.1, 0.35),legend.key.size = unit(.3, "in"))+
+  scale_color_manual(values=color.region, name= "Región",
+                     labels=c("Los Lagos", "Aysén"))
+```
+
+>
+##### **COMPARACIÓN POR MES INGRESO POST-DESCANsO BARRIO**
+```{r}
+#Modelo KM
+mod.pdb<- survfit(Surv(tpo.brote.12m, cens12m) ~ mes.in.postdesc, data=tpo.brote)
+mod.pdb
+
+#tabla supervivencia para cada grupo
+summary(mod.pdb) 
+
+#Log-Rank
+survdiff(Surv(tpo.brote.12m, cens12m) ~ mes.in.postdesc, rho=0, data=tpo.brote)
+```
+
+```{r fig.align='center', fig.width=10}
+# Gráfico con <GGPLOT2 y GGSURV>
+
+ggsurv(mod.pdb)+
+  guides(linetype=FALSE)+
+  ylim(0,1)+
+  scale_x_continuous(breaks=seq(0,12,2))+
+  labs(x="\nTiempo (Meses)",y="Supervivencia\n")+
+  ggtitle(expression(atop("Tiempo al 1er Cuadro SRS Post Ingreso, en Salmón del Atlántico - Mes Ingreso Post-Descanso Barrio",   atop(italic("Región de Los Lagos y Región de Aysén - Ciclos Cerrados Ene-14 a Jun-15.Nivel Jaula")))))+
+  theme(legend.background = element_rect(fill = "white"),legend.key = element_rect(fill = "white"),
+        legend.position = c(0.1, 0.45),legend.key.size = unit(.3, "in"))
+
+```
+
+>
+##### **COMPARAR CURVAS DE SUPERVIVENCIA EN BASE AL PESO INGRESO**
+```{r}
+#Para ver los datos de la base, en especial `peso.in`
+summary(tpo.brote)
+
+#Primero crear las categorías para la variable peso
+pesoCat <- cut(tpo.brote$peso.in,c(0,100,999))  
+summary(pesoCat)
+
+```
+
+```{r}
+#Modleo Kamplan-Meir para pesos de ingreso
+peso.surv <- survfit(Surv(tpo.brote.12m, cens12m)~ strata(pesoCat),conf.type="log-log", data=tpo.brote)
+print(peso.surv)
+
+#Log-Rank
+survdiff(Surv(tpo.brote.12m, cens12m) ~ pesoCat, rho=0, data=tpo.brote)
+
+#plot básico
+plot(peso.surv, lty=c(6,1), xlab="Tiempo", ylab="Probabilidad de Supervivencia",col=c("2","5"))
+legend(4,1.0,c("Grupo 1","Grupo 2"),lty=c(6,1), col=c("2","5"))
+```
+
+```{r fig.align='center', fig.width=9, fig.height=5}
+# Gráfico con <GGPLOT2 y GGSURV>
+color.peso <- c("green", "red") #Colores manual
+
+ggsurv(peso.surv)+
+  guides(linetype=FALSE)+
+  ylim(0,1)+
+  scale_x_continuous(breaks=seq(0,12,2))+
+  labs(x="\nTiempo (Meses)",y="Supervivencia\n")+
+  ggtitle(expression(atop("Tiempo al Primer Cuadro SRS, Post Ingreso a Mar en Salmón del Atlántico - Peso Ingreso", atop(italic("Región de Los Lagos y Región de Aysén - Ciclos Cerrados Ene-14 a Jun-15.Nivel Jaula")))))+
+  theme(legend.background = element_rect(fill = "white"),legend.key = element_rect(fill = "white"),
+        legend.position = c(0.1, 0.35),legend.key.size = unit(.3, "in"))+
+  scale_color_manual(values=color.peso, name= "Peso Ingreso",
+                     labels=c("< 100 gr.", "> 100 gr."))
+
+```
+
+
